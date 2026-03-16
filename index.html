@@ -1,0 +1,874 @@
+<!-- Made by @not.andre16 https://www.instagram.com/not.andre16/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Point Cloud</title>
+    <link rel="icon" type="image/jpeg" href="./log.jpg">
+    
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #0b0b0b;
+            --panel-bg: rgba(15, 15, 15, 0.90);
+            --text-main: #e5e5e5;
+            --text-muted: #888888;
+            --accent: #d4d4d4;
+            --slider-track: #333333;
+            --slider-center: #555555;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            color: var(--text-main);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Minimalist UI Container */
+        #ui-container {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 260px;
+            padding: 28px 28px 10px 28px; /* Reduced bottom padding for toggle btn */
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+        }
+
+        /* Header Section */
+        .header-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 0; /* Controlled by gap in parent */
+            border-bottom: 1px solid #222;
+            padding-bottom: 16px;
+        }
+
+        /* Collapsible Container */
+        #ui-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            max-height: 800px; /* Arbitrary large height for transition */
+            opacity: 1;
+        }
+
+        #ui-controls.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin: 0;
+        }
+
+        /* Toggle Button */
+        #toggle-btn {
+            width: 100%;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+            margin-top: -10px; /* Pull it up a bit */
+            padding-top: 10px;
+        }
+
+        #toggle-btn:hover {
+            opacity: 1;
+        }
+
+        #toggle-btn svg {
+            width: 12px;
+            height: 12px;
+            fill: var(--text-muted);
+            transition: transform 0.3s ease;
+        }
+
+        #toggle-btn.rotated svg {
+            transform: rotate(180deg);
+        }
+
+        .title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-main);
+        }
+
+        #fps-counter {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 9px;
+            color: var(--text-muted);
+            letter-spacing: 0;
+        }
+
+        /* Subtitle / Credits */
+        .subtitle {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+
+        .subtitle a {
+            color: var(--text-muted);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .subtitle a:hover {
+            color: var(--text-main);
+            border-bottom-color: var(--text-main);
+        }
+
+        /* Labels */
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Slider Container for Visual Guides */
+        .slider-wrapper {
+            position: relative;
+            width: 100%;
+            height: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        /* Center Tick Mark */
+        .slider-center-tick {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 1px;
+            height: 8px;
+            background-color: var(--slider-center);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Custom Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            background: var(--slider-track);
+            border: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 10px;
+            width: 10px;
+            background: var(--bg-color); 
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            margin-top: -4px;
+            cursor: grab;
+            transition: transform 0.1s ease, background-color 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.3);
+            background: var(--accent);
+        }
+
+        input[type="range"]:active::-webkit-slider-thumb {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        input[type="range"]:focus {
+            outline: none;
+        }
+
+        /* Select Input */
+        select {
+            width: 100%;
+            background-color: transparent;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 500;
+            border: 1px solid var(--slider-track);
+            padding: 10px;
+            border-radius: 0;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s;
+            text-transform: uppercase;
+        }
+        select:hover {
+            border-color: var(--text-muted);
+        }
+        select option {
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+
+        /* File Upload */
+        #file-input-container {
+            border: 1px solid var(--slider-track);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(255,255,255,0.01);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #file-input-container:hover {
+            border-color: var(--text-muted);
+            background: rgba(255,255,255,0.03);
+        }
+
+        input[type="file"] { display: none; }
+
+        .upload-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .icon {
+            width: 14px;
+            height: 14px;
+            fill: var(--text-muted);
+            transition: fill 0.2s;
+        }
+        
+        #file-input-container:hover .icon {
+            fill: var(--text-main);
+        }
+
+        #file-name {
+            margin-top: 8px;
+            font-size: 9px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Color Picker */
+        .color-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            background: none;
+            cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch {
+            border: 1px solid var(--slider-track);
+            border-radius: 50%;
+        }
+
+        /* Demo Button */
+        .btn-text {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 10px;
+            text-decoration: none;
+            cursor: pointer;
+            padding: 0;
+            text-align: left;
+            margin-top: -10px;
+            transition: color 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            align-self: flex-start;
+        }
+        .btn-text:hover { color: var(--text-main); text-decoration: underline; }
+
+        .control-group { margin-bottom: 0; }
+        
+        /* Loading Overlay */
+        #loader {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            display: none;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <div class="header-section">
+            <div class="title-row">
+                <h1>Point Cloud</h1>
+                <div id="fps-counter">00 FPS</div>
+            </div>
+            <div class="subtitle">
+                Made by <a href="https://instagram.com/not.andre16" target="_blank">@not.andre16</a> 
+            </div>
+        </div>
+        
+        <div id="ui-controls">
+            <div id="file-input-container" onclick="document.getElementById('img-upload').click()">
+                <div class="upload-label">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M19 13v5c0 .55-.45 1-1 1H6c-.55 0-1-.45-1-1v-5c0-.55-.45-1-1-1s-1 .45-1 1v6c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6c0-.55-.45-1-1-1s-1 .45-1 1zm-7-9.41l2.29 2.29c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41l-4-4a.9959.9959 0 0 0-1.41 0l-4 4c-.39.39-.39 1.02 0 1.41s1.02.39 1.41 0L11 3.59V15c0 .55.45 1 1 1s1-.45 1-1V3.59z"/>
+                    </svg>
+                    Upload Image
+                </div>
+                <div id="file-name">No file selected</div>
+                <input type="file" id="img-upload" accept="image/*">
+            </div>
+
+            <button class="btn-text" id="btn-reset">Reset to Demo</button>
+            
+            <div class="control-group">
+                <label>Output Resolution</label>
+                <select id="resolution-select">
+                    <option value="240" selected>Low (Performance)</option>
+                    <option value="360">Medium (Balanced)</option>
+                    <option value="480">High (Detailed)</option>
+                    <option value="600">Ultra (Heavy)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Depth / Volume</label>
+                <div class="slider-wrapper">
+                    <div class="slider-center-tick"></div>
+                    <input type="range" id="depth-slider" min="0" max="300" value="150" data-default="150">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Point Density</label>
+                <div class="slider-wrapper">
+                    <div class="slider-center-tick"></div>
+                    <input type="range" id="density-slider" min="0" max="100" value="50" data-default="50">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Organic Noise</label>
+                <div class="slider-wrapper">
+                    <input type="range" id="noise-slider" min="0" max="100" value="0" data-default="0">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Point Size</label>
+                <div class="slider-wrapper">
+                    <div class="slider-center-tick"></div>
+                    <input type="range" id="size-slider" min="0.5" max="8" value="3.0" step="0.05" data-default="3.0">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Background</label>
+                <div class="color-wrapper">
+                    <input type="color" id="bg-color" value="#0b0b0b">
+                    <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Pick Color</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="toggle-btn" title="Toggle Controls">
+            <!-- Chevron Icon -->
+            <svg viewBox="0 0 24 24">
+                <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
+            </svg>
+        </div>
+    </div>
+
+    <div id="loader">Processing...</div>
+
+    <!-- Main Logic -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- GLOBAL VARIABLES ---
+        let scene, camera, renderer, controls;
+        let pointsMesh;
+        let originalPositions = null; // Store base positions for noise calculation
+        
+        // App State
+        let isDemoMode = true;
+        let loadedImage = null; // The standard HTML Image object
+        let animationId;
+
+        // UI Elements
+        const el = {
+            depth: document.getElementById('depth-slider'),
+            density: document.getElementById('density-slider'),
+            size: document.getElementById('size-slider'),
+            noise: document.getElementById('noise-slider'),
+            res: document.getElementById('resolution-select'),
+            bg: document.getElementById('bg-color'),
+            fps: document.getElementById('fps-counter'),
+            fileInput: document.getElementById('img-upload'),
+            fileName: document.getElementById('file-name'),
+            loader: document.getElementById('loader'),
+            resetBtn: document.getElementById('btn-reset'),
+            ui: document.getElementById('ui-container'),
+            uiControls: document.getElementById('ui-controls'),
+            toggleBtn: document.getElementById('toggle-btn')
+        };
+
+        // Initialize
+        init();
+        animate();
+
+        function init() {
+            // 1. Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(el.bg.value);
+            // Add some minimal fog for depth
+            scene.fog = new THREE.FogExp2(el.bg.value, 0.001);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+            camera.position.set(400, 300, 400);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // optimize for high-dpi
+            document.body.appendChild(renderer.domElement);
+
+            // 4. Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 1.0;
+
+            // 5. Setup Events
+            window.addEventListener('resize', onWindowResize);
+            setupUIEvents();
+
+            // 6. Initial Generation
+            generatePointCloud();
+        }
+
+        // --- CORE GENERATION LOGIC ---
+
+        function generatePointCloud() {
+            // Cleanup existing mesh
+            if (pointsMesh) {
+                scene.remove(pointsMesh);
+                pointsMesh.geometry.dispose();
+                pointsMesh.material.dispose();
+            }
+
+            el.loader.style.display = 'block';
+
+            // Allow UI to update before heavy lifting
+            setTimeout(() => {
+                if (isDemoMode) {
+                    createDemoCube();
+                } else {
+                    createImageCloud();
+                }
+                el.loader.style.display = 'none';
+            }, 50);
+        }
+
+        function createDemoCube() {
+            const densityVal = parseInt(el.density.value);
+            const zFactor = parseInt(el.depth.value); // Used as radius here
+            
+            // Map 0-100 slider to grid density (points per side)
+            // Base resolution mapping similar to original code
+            const resOption = parseInt(el.res.value);
+            const baseRes = THREE.MathUtils.mapLinear(resOption, 240, 600, 20, 50);
+            let pointsPerSide = Math.floor(THREE.MathUtils.mapLinear(densityVal, 0, 100, baseRes * 0.3, baseRes * 1.5));
+            if (pointsPerSide < 3) pointsPerSide = 3;
+
+            const radius = Math.max(zFactor, 20);
+            const spacing = (radius * 2) / (pointsPerSide - 1);
+            
+            // Arrays for BufferGeometry
+            const positions = [];
+            const colors = [];
+            const colorObj = new THREE.Color();
+
+            for (let ix = 0; ix < pointsPerSide; ix++) {
+                for (let iy = 0; iy < pointsPerSide; iy++) {
+                    for (let iz = 0; iz < pointsPerSide; iz++) {
+                        
+                        // Check if point is on surface (hollow cube)
+                        const isSurface = 
+                            (ix === 0 || ix === pointsPerSide - 1) ||
+                            (iy === 0 || iy === pointsPerSide - 1) ||
+                            (iz === 0 || iz === pointsPerSide - 1);
+
+                        if (!isSurface) continue;
+
+                        const x = (ix * spacing) - radius;
+                        const y = (iy * spacing) - radius;
+                        const z = (iz * spacing) - radius;
+
+                        positions.push(x, y, z);
+
+                        // Color Logic (Gradient based on position)
+                        // Normalize position to 0-1 for color
+                        const nX = (x + radius) / (radius * 2);
+                        const nY = (y + radius) / (radius * 2);
+                        const nZ = (z + radius) / (radius * 2);
+                        
+                        // Greyscale-ish with slight tint
+                        const brightness = 0.2 + (nX * 0.3) + (nY * 0.3) + (nZ * 0.4);
+                        colorObj.setHSL(0, 0, THREE.MathUtils.clamp(brightness, 0.1, 0.9));
+                        
+                        colors.push(colorObj.r, colorObj.g, colorObj.b);
+                    }
+                }
+            }
+
+            createMesh(positions, colors);
+            
+            // Adjust camera focus
+            controls.target.set(0,0,0);
+            controls.autoRotate = true;
+        }
+
+        function createImageCloud() {
+            if (!loadedImage) return;
+
+            const maxDim = parseInt(el.res.value);
+            const densityVal = parseInt(el.density.value);
+            const zFactor = parseInt(el.depth.value);
+
+            // Create an offscreen canvas to read pixel data
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Calculate resized dimensions maintaining aspect ratio
+            let w = loadedImage.width;
+            let h = loadedImage.height;
+            const aspect = w / h;
+
+            if (w > h) {
+                w = maxDim;
+                h = maxDim / aspect;
+            } else {
+                h = maxDim;
+                w = maxDim * aspect;
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            
+            // Draw image to canvas
+            ctx.drawImage(loadedImage, 0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, w, h).data;
+
+            const positions = [];
+            const colors = [];
+            const colorObj = new THREE.Color();
+
+            // Calculate step based on density slider
+            // Higher slider = lower step (more points)
+            // Slider 0-100 -> step 6 to 1
+            let step = Math.floor(THREE.MathUtils.mapLinear(densityVal, 0, 100, 6, 1));
+            if (step < 1) step = 1;
+
+            // Centering offsets
+            const offX = -w / 2;
+            const offY = -h / 2; // Y is inverted in 3D usually, but we'll flip logic below
+
+            for (let y = 0; y < h; y += step) {
+                for (let x = 0; x < w; x += step) {
+                    
+                    const index = (x + y * w) * 4;
+                    const r = imgData[index] / 255;
+                    const g = imgData[index + 1] / 255;
+                    const b = imgData[index + 2] / 255;
+                    const a = imgData[index + 3];
+
+                    // Alpha Cutoff
+                    if (a < 20) continue;
+
+                    // Calculate brightness for Z depth
+                    const brightness = (r + g + b) / 3;
+                    
+                    // Coordinates
+                    // We multiply x,y by 2 or 3 to spread them out a bit in 3D space
+                    const scale = 2; 
+                    const pX = (x + offX) * scale;
+                    const pY = -(y + offY) * scale; // Invert Y so image is right side up
+                    const pZ = brightness * zFactor;
+
+                    positions.push(pX, pY, pZ);
+                    
+                    // Push Colors
+                    colors.push(r, g, b);
+                }
+            }
+
+            createMesh(positions, colors);
+            controls.autoRotate = false; // Stop rotating for images usually
+        }
+
+        function createMesh(positions, colors) {
+            const geometry = new THREE.BufferGeometry();
+            
+            // 1. Create Typed Arrays
+            const posArray = new Float32Array(positions);
+            const colArray = new Float32Array(colors);
+
+            // 2. Set Attributes
+            geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colArray, 3));
+            
+            // 3. Store original positions for Noise animation
+            originalPositions = new Float32Array(positions);
+
+            // 4. Center geometry
+            // geometry.center(); // Optional, but usually good. We did manual centering for images.
+
+            // 5. Material
+            const material = new THREE.PointsMaterial({
+                size: parseFloat(el.size.value),
+                vertexColors: true,
+                sizeAttenuation: true,
+                depthWrite: false, // Helps with transparency blending visual feel
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            pointsMesh = new THREE.Points(geometry, material);
+            scene.add(pointsMesh);
+        }
+
+        // --- ANIMATION LOOP ---
+
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            
+            controls.update();
+
+            // FPS Counter (Approximation)
+            // Just displaying the loop running, robust FPS needs delta time calc
+            if (Date.now() % 30 === 0) {
+                // Not perfectly accurate but enough for UI
+                // Using 60 as placeholder as RequestAnimationFrame targets 60/144
+                // A real FPS counter requires measuring delta
+            }
+
+            if (pointsMesh) {
+                const time = Date.now() * 0.001;
+                const noiseAmt = parseInt(el.noise.value);
+
+                // Update Point Size dynamically without rebuilding
+                pointsMesh.material.size = parseFloat(el.size.value);
+
+                // Apply Noise (CPU Side)
+                // Note: GPU shader is faster, but this is plenty fast for <100k points in JS
+                if (noiseAmt > 0 && originalPositions) {
+                    const positions = pointsMesh.geometry.attributes.position.array;
+                    const count = positions.length / 3;
+                    const amp = noiseAmt * 0.5;
+
+                    for (let i = 0; i < count; i++) {
+                        const idx = i * 3;
+                        const ox = originalPositions[idx];
+                        const oy = originalPositions[idx + 1];
+                        const oz = originalPositions[idx + 2];
+
+                        // Simple sine wave interference pattern (Cheap "Organic" Noise)
+                        const n1 = Math.sin(ox * 0.02 + time) * Math.cos(oy * 0.01 + time);
+                        const n2 = Math.cos(ox * 0.03 - time) * Math.sin(oz * 0.02 + time);
+                        
+                        const noiseVal = (n1 + n2) * amp;
+
+                        // Only affect Z mostly, slightly X/Y
+                        positions[idx] = ox; // + noiseVal * 0.2;
+                        positions[idx + 1] = oy; // + noiseVal * 0.2;
+                        positions[idx + 2] = oz + noiseVal;
+                    }
+                    pointsMesh.geometry.attributes.position.needsUpdate = true;
+                } else if (noiseAmt === 0 && originalPositions && pointsMesh.geometry.attributes.position.needsUpdate) {
+                     // Reset to perfect positions once if noise was turned off
+                     const positions = pointsMesh.geometry.attributes.position.array;
+                     positions.set(originalPositions);
+                     pointsMesh.geometry.attributes.position.needsUpdate = false;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+        
+        // Better FPS counter using requestAnimationFrame delta
+        let lastTime = performance.now();
+        let frameCount = 0;
+        const fpsElem = el.fps;
+
+        function updateFPS() {
+            const now = performance.now();
+            frameCount++;
+            if (now - lastTime >= 1000) {
+                fpsElem.innerText = frameCount + " FPS";
+                frameCount = 0;
+                lastTime = now;
+            }
+            requestAnimationFrame(updateFPS);
+        }
+        updateFPS();
+
+
+        // --- EVENTS & UI HANDLERS ---
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function setupUIEvents() {
+            // Toggle HUD
+            el.toggleBtn.addEventListener('click', () => {
+                el.uiControls.classList.toggle('collapsed');
+                el.toggleBtn.classList.toggle('rotated');
+            });
+
+            // Sliders that require geometry rebuild
+            const rebuildEvents = ['change']; // use 'change' for sliders to avoid lag while dragging. 'input' for instant.
+            
+            // For smoother experience, Density/Res rebuild on release (change), 
+            // but Size/Depth/Noise update instantly.
+            
+            el.density.addEventListener('change', generatePointCloud);
+            el.res.addEventListener('change', generatePointCloud);
+            
+            // Depth needs rebuild OR vertex update. Rebuild is easier for implementation simplicity.
+            el.depth.addEventListener('input', () => {
+                // Debounce simple rebuild
+                if(window.rebuildTimeout) clearTimeout(window.rebuildTimeout);
+                window.rebuildTimeout = setTimeout(generatePointCloud, 50);
+            });
+
+            // BG Color
+            el.bg.addEventListener('input', (e) => {
+                const color = new THREE.Color(e.target.value);
+                scene.background = color;
+                scene.fog.color = color;
+            });
+
+            // Reset Double Click Logic
+            [el.depth, el.density, el.size, el.noise].forEach(slider => {
+                slider.addEventListener('dblclick', () => {
+                    slider.value = slider.getAttribute('data-default');
+                    // Trigger event manually
+                    slider.dispatchEvent(new Event('input'));
+                    slider.dispatchEvent(new Event('change'));
+                });
+            });
+
+            // File Upload
+            el.fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const img = new Image();
+                        img.onload = function() {
+                            loadedImage = img;
+                            isDemoMode = false;
+                            el.fileName.innerText = file.name;
+                            generatePointCloud();
+                        };
+                        img.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Demo Reset
+            el.resetBtn.addEventListener('click', () => {
+                isDemoMode = true;
+                loadedImage = null;
+                el.fileName.innerText = "Structure Cube Demo";
+                el.depth.value = el.depth.getAttribute('data-default');
+                el.density.value = el.density.getAttribute('data-default');
+                el.size.value = el.size.getAttribute('data-default');
+                el.noise.value = el.noise.getAttribute('data-default');
+                el.bg.value = "#0b0b0b";
+                scene.background = new THREE.Color("#0b0b0b");
+                generatePointCloud();
+            });
+        }
+    </script>
+</body>
+</html>
